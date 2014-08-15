@@ -33,6 +33,18 @@ class Entities(val toMap: Map[Symbol, Entity]) {
     def edit[C <: Component : ClassTag](f: C => Component): Entities = 
       map(e => if (e.has[C]) e.edit[C](f) else e)
   }
+  
+  class Focus[C <: Component](implicit C: ClassTag[C]) {
+    def foreach(f: C => Unit): Unit = 
+      having[C].foreach(e => f(e.get[C]))
+      
+    def map(f: C => Component): Entities = having[C].map(_ collect {
+      case C(comp) => f(comp)
+      case x => x
+    })
+  }
+  
+  def focus[C >: AnyRef <: Component  : ClassTag] = new Focus
 
   def having[C <: Component : ClassTag]: Having = having(Component.nameFor[C])
   def having(compName0: Symbol, compNames: Symbol*): Having = new Having(compName0 :: compNames.toList)

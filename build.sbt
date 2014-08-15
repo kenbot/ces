@@ -9,7 +9,7 @@ libraryDependencies ++= Seq(
   "org.scala-lang" % "scala-reflect" % "2.10.2")
 
 initialCommands += """
-  import ces._;
+  import kenbot.ces._;
   val es = Game.entities;
   val player = es('player)
 """

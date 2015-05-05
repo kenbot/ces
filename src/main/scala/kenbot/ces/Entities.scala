@@ -1,53 +1,80 @@
 package kenbot.ces
 
 
-import scala.reflect.runtime.universe.{Symbol => _, _}
 import scala.reflect.ClassTag
 
 object Entities {
-  def apply(entities: (Symbol, Entity)*) = new Entities(entities.toMap)
+  def apply(entities: (Entity.Id, Entity)*) = new Entities(entities.toMap)
 }
 
-class Entities(val toMap: Map[Symbol, Entity]) {
+class Entities(val toMap: Map[Entity.Id, Entity]) {
   
-  class Having(comps: List[Symbol]) {
-    def and[C <: Component : ClassTag]: Having = new Having(Component.nameFor[C] :: comps)
+
+  class Having[Args](protected val having: List[Component.Name], toArgs: Entity => Args) {
+
+    private def matches(e: Entity): Boolean = e.hasAll(having: _*)
+
+    def and[B <: Component : ClassTag]: Having[Args] = 
+      new Having(Component.nameFor[B] :: having, toArgs)
     
-    private def matches(e: Entity): Boolean = e.hasAll(comps: _*)
-    
-    def foreach(f: Entity => Unit): Unit = 
+    def foreach(f: Args => Unit): Unit = 
       for ((_, e) <- toMap if matches(e)) {
-        f(e)
+        f(toArgs(e))
       }
     
-    def map(f: Entity => Entity): Entities = new Entities(
+    def map(f: Args => Entity): Entities = new Entities(
         for ((id, e) <- toMap if matches(e)) 
-        yield id -> f(e))
+        yield id -> f(toArgs(e)))
     
-    def filter(f: Entity => Boolean): Entities = new Entities(
-        for ((id, e) <- toMap if matches(e) && f(e))
+    def filter(f: Args => Boolean): Entities = new Entities(
+        for ((id, e) <- toMap if matches(e) && f(toArgs(e)))
         yield id -> e)
     
-    def collect(f: PartialFunction[Entity, Entity]): Entities = ???
+    def collect(f: PartialFunction[Args, Entity]): Entities = ???
     
     def edit[C <: Component : ClassTag](f: C => Component): Entities = 
       map(e => if (e.has[C]) e.edit[C](f) else e)
   }
   
-  class Focus[C <: Component](implicit C: ClassTag[C]) {
-    def foreach(f: C => Unit): Unit = 
-      having[C].foreach(e => f(e.get[C]))
-      
-    def map(f: C => Component): Entities = having[C].map(_ collect {
-      case C(comp) => f(comp)
-      case x => x
-    })
+  class Having0[A](having: List[Component.Name]) extends Having[A](having) {
+    def and[B <: Component : ClassTag]: Having[(A,B)] = new Having[(A,B)](Component.nameFor[B] :: comps) {
+      def and[C <: Component : ClassTag]: Having[(A,B,C)] = new Having[(A,B,C)](Component.nameFor[C] :: this.comps) {
+        def and[D <: Component : ClassTag]: Having[(A,B,C,D)] = new Having[(A,B,C,D)](Component.nameFor[D] :: this.comps) {
+          def and[E <: Component : ClassTag]: Having[(A,B,C,D,E)] = new Having[(A,B,C,D,E)](Component.nameFor[E] :: this.comps) {
+            
+          }
+        }
+      }
+    }
   }
   
-  def focus[C >: AnyRef <: Component  : ClassTag] = new Focus
+  /*
+  class Focus[C <: Component](implicit C: ClassTag[C]) {
+    def foreach(f: (Entity, C) => Unit): Unit = 
+      having[C].foreach(e => f(e, e.get[C]))
+      
+    def map(f: (Entity, C) => Component): Entities = having[C].map(e => e collect {
+      case C(comp) => f(e, comp)
+      case x => x
+    })
+    
+    def and[C2 <: Component : ClassTag] = new Focus2[C2]
+    
+    class Focus2[C2 <: Component](implicit C2: ClassTag[C2]) {
+      def foreach(f: (Entity, C, C2) => Unit): Unit = 
+        having[C].and[C2].foreach(e => f(e, e.get[C], e.get[C2]))
+      
+      def map(f: (Entity, C, C2) => Component): Entities = having[C].and[C2].map(e => e collect {
+        case C2(comp) => f(e, comp)
+        case x => x
+      })
+    }
+  }
+  
+  def focus[C <: Component : ClassTag] = new Focus */
 
   def having[C <: Component : ClassTag]: Having = having(Component.nameFor[C])
-  def having(compName0: Symbol, compNames: Symbol*): Having = new Having(compName0 :: compNames.toList)
+  def having(compName0: Component.Name, compNames: Component.Name*): Having = new Having(compName0 :: compNames.toList)
   
   def entities = toMap.values
   
@@ -57,7 +84,7 @@ class Entities(val toMap: Map[Symbol, Entity]) {
   
   def -(id: Symbol): Entities = new Entities(toMap - id)
   
-  def +(kv: (Symbol, Entity)): Entities = new Entities(toMap + kv)
+  def :+(kv: (Entity.Id, Entity)): Entities = new Entities(toMap + kv)
     
 
   def filter(f: Entity => Boolean): Entities = collect {

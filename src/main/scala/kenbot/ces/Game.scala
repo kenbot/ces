@@ -1,6 +1,8 @@
 package kenbot.ces
 
 import scala.reflect.ClassTag
+import shapeless._
+
 
 case object Player extends Component
 
@@ -10,6 +12,7 @@ case class Position(x: Double, y: Double) extends Component {
   def up(n: Double) = copy(y = y - n)
   def down(n: Double) = copy(y = y + n)
 }
+
 case class Name(name: String) extends Component
 
 case class Health(health: Int) extends Component {
@@ -17,7 +20,7 @@ case class Health(health: Int) extends Component {
   def -(n: Int) = Health(health - n)
 }
 
-case class AWTRender(render: (java.awt.Graphics2D, Entity) => Unit) extends Component
+case class AWTRender(apply: (java.awt.Graphics2D, Entity) => Unit) extends Component
 
 class Input
 
@@ -50,10 +53,16 @@ object Game {
     val es = 1 to 100 map (n => Symbol(n.toString) -> genPlayer())
     Entities(es: _*)
   }
+    
+  val redDot = AWTRender {
+    case (g,e) => 
+      val Position(x,y) = e.get[Position]
+      g.fillRect(x.toInt, y.toInt, 5, 5)
+  }
   
   val entities = Entities(
-    'player -> Entity(Player, Position(99,88), Name("Flapjack"), Health(10)),
-    'foo -> Entity(Name("foo"), Position(9,8)))
+    'player -> Entity(Player, Position(99,88), Name("Flapjack"), Health(10), redDot),
+    'foo -> Entity(Name("foo"), Position(9,8), redDot))
     
   entities.having[Position].and[Health].edit[Position](_ up 5)
     
@@ -65,7 +74,11 @@ object Game {
     _.having[Position].map(_ + Health(66)),
     _.edit[Position](_ up 5),
     _.edit[Health](_ + 5))
+
   
+    
+  val x = Health :: Position :: HNil
+
   entities.edit[Position](_ left 5)
   entities.edit[Health](_ + 5)
     
